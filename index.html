@@ -479,11 +479,12 @@ function render(){
   const isSingleMultiAZ = (arch === 'single' && az > 1);
   $("crossAzDetails").style.display = isSingleMultiAZ ? "block" : "none";
 
-  const crossAzOn = isSingleMultiAZ; // Always calculated/enabled when applicable
+  const crossAzOn = isSingleMultiAZ; 
   const crossAzPct = Number($("crossAzPct").value);
   $("crossAzPctVal").textContent = crossAzPct + "%";
   const crossAzGb = crossAzOn ? gb * (crossAzPct / 100) : 0;
-  const crossAzCost = crossAzGb * 0.02;
+  // Fixed to single-direction $0.01/GB rate matching standard single-direction inter-AZ transfer
+  const crossAzCost = crossAzGb * 0.01;
 
   const egressOn = $("egressToggle").checked;
   const egressPct = Number($("egressPct").value);
@@ -512,7 +513,7 @@ function render(){
     },
     {
       name: "Cross-AZ data transfer to NAT",
-      meta: crossAzOn ? `${crossAzGb.toLocaleString()} GB \u00d7 $0.02/GB (round trip)` : "N/A (same AZ or multi-gateway)",
+      meta: crossAzOn ? `${crossAzGb.toLocaleString()} GB \u00d7 $0.01/GB` : "N/A (same AZ or multi-gateway)",
       amt: crossAzCost,
       on: crossAzOn
     },
