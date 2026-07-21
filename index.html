@@ -226,6 +226,14 @@
         <label class="switch"><input type="checkbox" id="eipToggle" checked><span class="slider-el"></span></label>
       </div>
 
+      <details id="crossAzDetails" style="display:none;">
+        <summary>Cross-AZ details</summary>
+        <label class="field">
+          <div class="field-label"><span>% of data originating from other AZs</span><span class="val" id="crossAzPctVal">50%</span></div>
+          <input type="range" id="crossAzPct" min="0" max="100" value="50" step="5">
+        </label>
+      </details>
+
       <div class="toggle-row">
         <div>
           <div class="tlabel">Internet egress on top</div>
@@ -342,6 +350,7 @@ $("gbInput").addEventListener("input", () => {
 });
 $("hrsSlider").addEventListener("input", render);
 $("eipToggle").addEventListener("change", render);
+$("crossAzPct").addEventListener("input", render);
 $("egressToggle").addEventListener("change", () => {
   $("egressDetails").style.display = $("egressToggle").checked ? "block" : "none";
   render();
@@ -360,10 +369,6 @@ function gatewayCount(azCount, archType){
   return azCount; // perAZ or regional: one active gateway-equivalent per AZ
 }
 
-// Diagram now takes the AZ count separately from the gateway count, so a
-// "Single" architecture with multiple AZs correctly draws every private
-// subnet funneling into the one shared NAT Gateway, instead of only ever
-// drawing a single lane.
 function drawDiagram(azCount, gwCount, archType){
   const svg = $("diagram");
   const W = 900, H = 300;
@@ -471,6 +476,15 @@ function render(){
   const eipOn = $("eipToggle").checked;
   const eipCost = eipOn ? gwCount * hrs * 0.005 : 0;
 
+  const isSingleMultiAZ = (arch === 'single' && az > 1);
+  $("crossAzDetails").style.display = isSingleMultiAZ ? "block" : "none";
+
+  const crossAzOn = isSingleMultiAZ; // Always calculated/enabled when applicable
+  const crossAzPct = Number($("crossAzPct").value);
+  $("crossAzPctVal").textContent = crossAzPct + "%";
+  const crossAzGb = crossAzOn ? gb * (crossAzPct / 100) : 0;
+  const crossAzCost = crossAzGb * 0.02;
+
   const egressOn = $("egressToggle").checked;
   const egressPct = Number($("egressPct").value);
   $("egressPctVal").textContent = egressPct + "%";
@@ -478,7 +492,7 @@ function render(){
   const egressGb = egressOn ? gb * (egressPct/100) : 0;
   const egressCost = egressOn ? egressGb * egressRate : 0;
 
-  const total = hourlyCost + dataCost + eipCost + egressCost;
+  const total = hourlyCost + dataCost + eipCost + crossAzCost + egressCost;
 
   const items = [
     {
@@ -495,6 +509,12 @@ function render(){
       name: "Elastic IP (public IPv4)",
       meta: eipOn ? `${gwCount} IP${gwCount>1?'s':''} \u00d7 ${hrs} hrs \u00d7 $0.005` : "toggled off",
       amt: eipCost, on:eipOn
+    },
+    {
+      name: "Cross-AZ data transfer to NAT",
+      meta: crossAzOn ? `${crossAzGb.toLocaleString()} GB \u00d7 $0.02/GB (round trip)` : "N/A (same AZ or multi-gateway)",
+      amt: crossAzCost,
+      on: crossAzOn
     },
     {
       name: "Internet data transfer out",
