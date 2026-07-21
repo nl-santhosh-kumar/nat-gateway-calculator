@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NAT Gateway Cost Blueprint</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#12293f;
+    --paper-deep:#0d2032;
+    --line:#7fb8d4;
+    --line-dim:#3d6a86;
+    --line-faint:#254a63;
+    --ink:#eaf5fb;
+    --ink-dim:#a9c8db;
+    --copper:#e39a4f;
+    --copper-dim:#8a5f34;
+    --ok:#7fd9a6;
+    --display: 'Rajdhani', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+    --body: 'Inter', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      linear-gradient(var(--paper) , var(--paper)) ,
+      repeating-linear-gradient(0deg, var(--line-faint) 0px, transparent 1px, transparent 40px, var(--line-faint) 41px),
+      repeating-linear-gradient(90deg, var(--line-faint) 0px, transparent 1px, transparent 40px, var(--line-faint) 41px);
+    background-blend-mode: normal;
+    color:var(--ink);
+    font-family:var(--body);
+    min-height:100vh;
+    padding:32px 20px 60px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  /* header */
+  .eyebrow{
+    font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--copper); display:flex; align-items:center; gap:10px; margin-bottom:6px;
+  }
+  .eyebrow::before{content:"";width:22px;height:1px;background:var(--copper);display:inline-block;}
+  h1{
+    font-family:var(--display); font-weight:700; font-size:clamp(30px,4.4vw,50px);
+    margin:0 0 6px; letter-spacing:.01em; color:var(--ink);
+  }
+  .sub{color:var(--ink-dim); font-size:15px; max-width:640px; line-height:1.55; margin-bottom:28px;}
+  .sub b{color:var(--ink);font-weight:600;}
+
+  /* layout */
+  .grid{display:grid; grid-template-columns: 380px 1fr; gap:22px;}
+  @media (max-width: 920px){ .grid{grid-template-columns:1fr;} }
+
+  .panel{
+    background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+    border:1px solid var(--line-dim);
+    position:relative;
+    padding:22px 22px 24px;
+  }
+  .panel::before{ /* corner ticks */
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background-image:
+      linear-gradient(var(--line) 2px, transparent 2px),
+      linear-gradient(90deg, var(--line) 2px, transparent 2px);
+    background-size:12px 12px;
+    background-repeat:no-repeat;
+    background-position: top left, top left;
+    opacity:.9;
+  }
+  .panel-title{
+    font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--line); margin-bottom:18px; display:flex; justify-content:space-between;
+  }
+
+  label.field{display:block; margin-bottom:18px;}
+  .field-label{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-family:var(--mono); font-size:11.5px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em;
+    margin-bottom:7px;
+  }
+  .field-label .val{color:var(--copper); font-weight:700;}
+
+  select, input[type=number]{
+    width:100%; background:var(--paper-deep); border:1px solid var(--line-dim); color:var(--ink);
+    font-family:var(--body); font-size:14px; padding:9px 10px; outline:none;
+  }
+  select:focus, input[type=number]:focus{border-color:var(--line);}
+
+  input[type=range]{
+    width:100%; -webkit-appearance:none; height:2px; background:var(--line-dim); outline:none; margin:6px 0 2px;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+    background:var(--copper); border:2px solid var(--paper); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:14px; height:14px; border-radius:50%; background:var(--copper); border:2px solid var(--paper); cursor:pointer;
+  }
+
+  .seg{display:flex; border:1px solid var(--line-dim);}
+  .seg button{
+    flex:1; background:transparent; border:none; color:var(--ink-dim); font-family:var(--mono);
+    font-size:11.5px; letter-spacing:.03em; padding:9px 6px; cursor:pointer; border-right:1px solid var(--line-dim);
+    text-transform:uppercase;
+  }
+  .seg button:last-child{border-right:none;}
+  .seg button.active{background:var(--copper); color:var(--paper-deep); font-weight:700;}
+
+  .toggle-row{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;}
+  .toggle-row .tlabel{font-size:13px; color:var(--ink); line-height:1.4;}
+  .toggle-row .thint{font-size:11.5px; color:var(--ink-dim); font-family:var(--mono);}
+  .switch{position:relative; width:38px; height:20px; flex:0 0 auto; margin-left:14px;}
+  .switch input{opacity:0; width:0; height:0;}
+  .slider-el{position:absolute; inset:0; background:var(--line-dim); cursor:pointer; transition:.15s;}
+  .slider-el::before{content:""; position:absolute; width:14px;height:14px; left:3px; top:3px; background:var(--ink); transition:.15s;}
+  input:checked + .slider-el{background:var(--copper);}
+  input:checked + .slider-el::before{transform:translateX(18px); background:var(--paper-deep);}
+
+  .note{font-size:11.5px; color:var(--line); font-family:var(--mono); line-height:1.5; margin-top:2px;}
+
+  details{margin-top:6px; border-top:1px dashed var(--line-dim); padding-top:14px;}
+  summary{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); cursor:pointer;}
+  details[open] summary{color:var(--copper);}
+  details .field{margin-top:14px;}
+
+  /* right side: diagram + ledger */
+  .right-stack{display:flex; flex-direction:column; gap:22px;}
+
+  .diagram-panel{padding:26px 22px 18px;}
+  svg{width:100%; height:auto; display:block;}
+  .diag-caption{
+    font-family:var(--mono); font-size:11px; color:var(--line); text-align:center; margin-top:6px; letter-spacing:.04em;
+  }
+
+  /* ledger */
+  .ledger-title{
+    font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--line);
+    display:flex; justify-content:space-between; margin-bottom:14px;
+  }
+  .line-item{
+    display:grid; grid-template-columns: 1fr auto auto; gap:14px; align-items:baseline;
+    padding:10px 0; border-bottom:1px dashed var(--line-faint); font-size:14px;
+  }
+  .line-item:last-of-type{border-bottom:none;}
+  .li-name{color:var(--ink);}
+  .li-meta{font-family:var(--mono); font-size:11.5px; color:var(--ink-dim);}
+  .li-amt{font-family:var(--mono); font-size:15px; color:var(--ink); text-align:right; min-width:88px;}
+  .li-off .li-amt, .li-off .li-name, .li-off .li-meta{color:var(--line-dim);}
+
+  .total-row{
+    margin-top:16px; padding-top:16px; border-top:2px solid var(--line);
+    display:flex; justify-content:space-between; align-items:flex-end;
+  }
+  .total-label{font-family:var(--display); font-size:16px; letter-spacing:.03em; color:var(--ink-dim); text-transform:uppercase;}
+  .total-amt{font-family:var(--mono); font-weight:700; font-size:34px; color:var(--copper);}
+  .annual{font-family:var(--mono); font-size:12px; color:var(--ink-dim); text-align:right; margin-top:2px;}
+
+  .stamp{
+    position:absolute; top:22px; right:22px; border:2px solid var(--copper-dim); color:var(--copper-dim);
+    font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+    padding:5px 9px; transform:rotate(3deg); opacity:.75;
+  }
+
+  .disclaimer{
+    font-family:var(--mono); font-size:11px; color:var(--ink-dim); line-height:1.7; margin-top:22px;
+    border-left:2px solid var(--line-dim); padding-left:12px;
+  }
+  .disclaimer a{color:var(--line); }
+
+  ::selection{background:var(--copper); color:var(--paper-deep);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">VPC NETWORKING &middot; COST BLUEPRINT</div>
+  <h1>NAT Gateway Cost Estimator</h1>
+  <p class="sub">Pick a VPC layout &mdash; region, Availability Zones, and gateway architecture &mdash; and see the monthly bill itemized the way AWS actually charges it: <b>gateway-hours</b>, <b>data processed</b>, and the extras that catch people off guard.</p>
+
+  <div class="grid">
+    <!-- CONTROLS -->
+    <div class="panel">
+      <div class="panel-title"><span>01 &mdash; Configure VPC</span><span id="regionRateTag">$0.045/hr</span></div>
+
+      <label class="field">
+        <div class="field-label"><span>AWS Region</span></div>
+        <select id="region"></select>
+        <div class="note" id="regionNote">Verify against current AWS pricing before budgeting.</div>
+      </label>
+
+      <label class="field">
+        <div class="field-label"><span>Gateway Architecture</span></div>
+        <div class="seg" id="archSeg">
+          <button data-arch="single" class="active">Single</button>
+          <button data-arch="perAZ">One / AZ</button>
+          <button data-arch="regional">Regional</button>
+        </div>
+        <div class="note" id="archNote">One NAT Gateway for the whole VPC &mdash; cheapest, single point of failure.</div>
+      </label>
+
+      <label class="field">
+        <div class="field-label"><span>Availability Zones / Subnets</span><span class="val" id="azVal">2</span></div>
+        <input type="range" id="azCount" min="1" max="6" value="2" step="1">
+      </label>
+
+      <label class="field">
+        <div class="field-label"><span>Data Processed / Month</span><span class="val" id="gbVal">200 GB</span></div>
+        <input type="range" id="gbSlider" min="0" max="5000" value="200" step="10">
+        <input type="number" id="gbInput" min="0" style="margin-top:8px;" value="200">
+      </label>
+
+      <label class="field">
+        <div class="field-label"><span>Hours Running / Month</span><span class="val" id="hrsVal">730</span></div>
+        <input type="range" id="hrsSlider" min="1" max="730" value="730" step="1">
+        <div class="note">730 = always on. Lower this for dev/test schedules that shut down nightly.</div>
+      </label>
+
+      <div class="toggle-row">
+        <div>
+          <div class="tlabel">Elastic IP charge</div>
+          <div class="thint">$0.005/hr per public IP</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="eipToggle" checked><span class="slider-el"></span></label>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="tlabel">Internet egress on top</div>
+          <div class="thint">standard data transfer out</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="egressToggle"><span class="slider-el"></span></label>
+      </div>
+
+      <details id="egressDetails" style="display:none;">
+        <summary>Egress details</summary>
+        <label class="field">
+          <div class="field-label"><span>% of processed data leaving to internet</span><span class="val" id="egressPctVal">50%</span></div>
+          <input type="range" id="egressPct" min="0" max="100" value="50" step="5">
+        </label>
+        <label class="field">
+          <div class="field-label"><span>Egress rate ($/GB)</span></div>
+          <input type="number" id="egressRate" value="0.09" step="0.01" min="0">
+        </label>
+      </details>
+
+      <details>
+        <summary>Override rate manually</summary>
+        <label class="field">
+          <div class="field-label"><span>Custom $/hr &amp; $/GB</span></div>
+          <input type="number" id="customRate" step="0.001" min="0" placeholder="e.g. 0.045">
+          <div class="note">Leave blank to use the region rate above. Rates match hourly &amp; per-GB.</div>
+        </label>
+      </details>
+    </div>
+
+    <!-- DIAGRAM + LEDGER -->
+    <div class="right-stack">
+      <div class="panel diagram-panel">
+        <div class="stamp">EST.</div>
+        <div class="panel-title"><span>02 &mdash; Routing Diagram</span><span id="diagArchLabel">SINGLE NAT</span></div>
+        <svg id="diagram" viewBox="0 0 900 300" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="diag-caption">private subnet &rarr; NAT gateway &rarr; internet gateway &rarr; internet</div>
+      </div>
+
+      <div class="panel">
+        <div class="ledger-title"><span>03 &mdash; Monthly Ledger</span><span id="ledgerRegion">US-EAST-1</span></div>
+        <div id="ledgerItems"></div>
+        <div class="total-row">
+          <div class="total-label">Total / month</div>
+          <div style="text-align:right;">
+            <div class="total-amt" id="totalAmt">$0.00</div>
+            <div class="annual" id="annualAmt">$0.00 / year</div>
+          </div>
+        </div>
+        <div class="disclaimer">
+          Figures use publicly reported AWS NAT Gateway list prices (mid-2026) and are estimates for planning only &mdash; AWS bills in exact partial cents, list prices change, and your account may have Savings Plans, credits, or negotiated rates. Confirm exact numbers in the <a href="https://aws.amazon.com/vpc/pricing/" target="_blank" rel="noopener">AWS VPC Pricing page</a> or AWS Pricing Calculator before budgeting.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- region rate table ($/hr == $/GB for standard NAT Gateway processing) ----
+const REGIONS = [
+  {id:"us-east-1", name:"US East (N. Virginia)", rate:0.045},
+  {id:"us-east-2", name:"US East (Ohio)", rate:0.045},
+  {id:"us-west-1", name:"US West (N. California)", rate:0.045},
+  {id:"us-west-2", name:"US West (Oregon)", rate:0.045},
+  {id:"ca-central-1", name:"Canada (Central)", rate:0.045, est:true},
+  {id:"eu-west-1", name:"Europe (Ireland)", rate:0.048},
+  {id:"eu-west-2", name:"Europe (London)", rate:0.048},
+  {id:"eu-west-3", name:"Europe (Paris)", rate:0.048, est:true},
+  {id:"eu-central-1", name:"Europe (Frankfurt)", rate:0.052},
+  {id:"eu-north-1", name:"Europe (Stockholm)", rate:0.048, est:true},
+  {id:"ap-south-1", name:"Asia Pacific (Mumbai)", rate:0.045, est:true},
+  {id:"ap-southeast-1", name:"Asia Pacific (Singapore)", rate:0.059, est:true},
+  {id:"ap-southeast-2", name:"Asia Pacific (Sydney)", rate:0.059, est:true},
+  {id:"ap-northeast-1", name:"Asia Pacific (Tokyo)", rate:0.062, est:true},
+  {id:"ap-northeast-2", name:"Asia Pacific (Seoul)", rate:0.059, est:true},
+  {id:"sa-east-1", name:"South America (S\u00e3o Paulo)", rate:0.093},
+];
+
+const $ = (id) => document.getElementById(id);
+const regionSel = $("region");
+REGIONS.forEach(r => {
+  const opt = document.createElement("option");
+  opt.value = r.id;
+  opt.textContent = `${r.name} (${r.id})`;
+  regionSel.appendChild(opt);
+});
+regionSel.value = "us-east-1";
+
+let arch = "single";
+$("archSeg").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if(!btn) return;
+  arch = btn.dataset.arch;
+  [...$("archSeg").children].forEach(b => b.classList.toggle("active", b === btn));
+  const notes = {
+    single: "One NAT Gateway for the whole VPC — cheapest, single point of failure.",
+    perAZ: "One NAT Gateway deployed in every selected AZ — standard HA pattern.",
+    regional: "One Regional NAT Gateway billed per active AZ — same hourly cost as one-per-AZ, simpler to manage."
+  };
+  $("archNote").textContent = notes[arch];
+  render();
+});
+
+// sync sliders <-> number inputs
+function syncPair(sliderId, displayId, fmt){
+  $(sliderId).addEventListener("input", render);
+}
+$("azCount").addEventListener("input", render);
+$("gbSlider").addEventListener("input", () => { $("gbInput").value = $("gbSlider").value; render(); });
+$("gbInput").addEventListener("input", () => {
+  let v = Math.max(0, Number($("gbInput").value) || 0);
+  if(v <= 5000) $("gbSlider").value = v;
+  render();
+});
+$("hrsSlider").addEventListener("input", render);
+$("eipToggle").addEventListener("change", render);
+$("egressToggle").addEventListener("change", () => {
+  $("egressDetails").style.display = $("egressToggle").checked ? "block" : "none";
+  render();
+});
+$("egressPct").addEventListener("input", render);
+$("egressRate").addEventListener("input", render);
+$("customRate").addEventListener("input", render);
+regionSel.addEventListener("change", render);
+
+function money(n){
+  return "$" + n.toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function gatewayCount(azCount, archType){
+  if(archType === "single") return 1;
+  return azCount; // perAZ or regional: one active gateway-equivalent per AZ
+}
+
+function drawDiagram(gwCount, archType){
+  const svg = $("diagram");
+  const W = 900, H = 300;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  let s = "";
+  const stroke = "var(--line)";
+  const strokeDim = "var(--line-dim)";
+
+  // VPC boundary
+  s += `<rect x="20" y="20" width="${W-40}" height="${H-40}" fill="none" stroke="${strokeDim}" stroke-width="1.5" stroke-dasharray="6 5"/>`;
+  s += `<text x="34" y="40" font-family="JetBrains Mono" font-size="11" fill="${stroke}" letter-spacing="1">VPC</text>`;
+
+  const shown = Math.min(gwCount, 4);
+  const overflow = gwCount - shown;
+  const laneH = (H-90) / shown;
+
+  for(let i=0;i<shown;i++){
+    const cy = 65 + laneH*i + laneH/2;
+    // private subnet box
+    s += `<rect x="55" y="${cy-24}" width="190" height="48" fill="none" stroke="${stroke}" stroke-width="1.5"/>`;
+    s += `<text x="70" y="${cy-6}" font-family="JetBrains Mono" font-size="10" fill="var(--ink-dim)">PRIVATE SUBNET</text>`;
+    s += `<text x="70" y="${cy+14}" font-family="JetBrains Mono" font-size="10" fill="var(--ink-dim)">AZ-${i+1}</text>`;
+
+    // arrow to NAT
+    s += `<line x1="245" y1="${cy}" x2="345" y2="${cy}" stroke="${stroke}" stroke-width="1.5" stroke-dasharray="3 4"/>`;
+    s += `<polygon points="345,${cy-4} 355,${cy} 345,${cy+4}" fill="${stroke}"/>`;
+
+    // NAT gateway box
+    s += `<rect x="360" y="${cy-24}" width="140" height="48" fill="var(--paper-deep)" stroke="var(--copper)" stroke-width="1.8"/>`;
+    s += `<text x="430" y="${cy-6}" text-anchor="middle" font-family="Rajdhani" font-weight="700" font-size="13" fill="var(--copper)">NAT GW</text>`;
+    s += `<text x="430" y="${cy+13}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--ink-dim)">${archType==='single' && i===0 ? 'shared' : 'AZ-'+(i+1)}</text>`;
+
+    // arrow to IGW rail
+    s += `<line x1="500" y1="${cy}" x2="610" y2="${cy}" stroke="${strokeDim}" stroke-width="1.5" stroke-dasharray="3 4"/>`;
+    s += `<polygon points="610,${cy-4} 620,${cy} 610,${cy+4}" fill="${strokeDim}"/>`;
+  }
+
+  // shared IGW + internet
+  const midY = H/2;
+  s += `<line x1="640" y1="60" x2="640" y2="${H-60}" stroke="${strokeDim}" stroke-width="1.5"/>`;
+  s += `<rect x="620" y="${midY-26}" width="60" height="52" fill="var(--paper-deep)" stroke="${stroke}" stroke-width="1.5"/>`;
+  s += `<text x="650" y="${midY+4}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="${stroke}">IGW</text>`;
+
+  s += `<line x1="680" y1="${midY}" x2="760" y2="${midY}" stroke="${stroke}" stroke-width="1.5" stroke-dasharray="3 4"/>`;
+  s += `<polygon points="760,${midY-4} 770,${midY} 760,${midY+4}" fill="${stroke}"/>`;
+  s += `<circle cx="820" cy="${midY}" r="34" fill="none" stroke="${stroke}" stroke-width="1.5"/>`;
+  s += `<text x="820" y="${midY-2}" text-anchor="middle" font-family="Rajdhani" font-weight="600" font-size="12" fill="var(--ink)">INTERNET</text>`;
+  s += `<text x="820" y="${midY+14}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--ink-dim)">0.0.0.0/0</text>`;
+
+  if(overflow > 0){
+    s += `<text x="55" y="${H-14}" font-family="JetBrains Mono" font-size="10" fill="var(--copper)">+ ${overflow} more AZ${overflow>1?'s':''} not shown, same pattern</text>`;
+  }
+
+  svg.innerHTML = s;
+  $("diagArchLabel").textContent = archType === "single" ? "SINGLE NAT" : (archType === "perAZ" ? "ONE PER AZ" : "REGIONAL NAT");
+}
+
+function render(){
+  const region = REGIONS.find(r => r.id === regionSel.value);
+  const az = Number($("azCount").value);
+  $("azVal").textContent = az;
+
+  const gb = Math.max(0, Number($("gbInput").value) || 0);
+  $("gbVal").textContent = gb.toLocaleString() + " GB";
+
+  const hrs = Number($("hrsSlider").value);
+  $("hrsVal").textContent = hrs;
+
+  const custom = $("customRate").value;
+  const rate = custom !== "" && !isNaN(Number(custom)) ? Number(custom) : region.rate;
+
+  $("regionRateTag").textContent = `$${rate.toFixed(3)}/hr`;
+  $("regionNote").textContent = region.est
+    ? "Estimated rate for this region — confirm exact figure at aws.amazon.com/vpc/pricing."
+    : "Publicly listed rate for this region (mid-2026).";
+  $("ledgerRegion").textContent = region.id.toUpperCase();
+
+  const gwCount = gatewayCount(az, arch);
+  drawDiagram(gwCount, arch);
+
+  const hourlyCost = gwCount * hrs * rate;
+  const dataCost = gb * rate;
+  const eipOn = $("eipToggle").checked;
+  const eipCost = eipOn ? gwCount * hrs * 0.005 : 0;
+
+  const egressOn = $("egressToggle").checked;
+  const egressPct = Number($("egressPct").value);
+  $("egressPctVal").textContent = egressPct + "%";
+  const egressRate = Math.max(0, Number($("egressRate").value) || 0);
+  const egressGb = egressOn ? gb * (egressPct/100) : 0;
+  const egressCost = egressOn ? egressGb * egressRate : 0;
+
+  const total = hourlyCost + dataCost + eipCost + egressCost;
+
+  const items = [
+    {
+      name: "NAT Gateway hourly charge",
+      meta: `${gwCount} gateway${gwCount>1?'s':''} \u00d7 ${hrs} hrs \u00d7 $${rate.toFixed(3)}`,
+      amt: hourlyCost, on:true
+    },
+    {
+      name: "Data processing",
+      meta: `${gb.toLocaleString()} GB \u00d7 $${rate.toFixed(3)}/GB`,
+      amt: dataCost, on:true
+    },
+    {
+      name: "Elastic IP (public IPv4)",
+      meta: eipOn ? `${gwCount} IP${gwCount>1?'s':''} \u00d7 ${hrs} hrs \u00d7 $0.005` : "toggled off",
+      amt: eipCost, on:eipOn
+    },
+    {
+      name: "Internet data transfer out",
+      meta: egressOn ? `${egressGb.toLocaleString()} GB \u00d7 $${egressRate.toFixed(3)}/GB` : "toggled off",
+      amt: egressCost, on:egressOn
+    },
+  ];
+
+  $("ledgerItems").innerHTML = items.map(it => `
+    <div class="line-item ${it.on ? '' : 'li-off'}">
+      <div class="li-name">${it.name}</div>
+      <div class="li-meta">${it.meta}</div>
+      <div class="li-amt">${money(it.amt)}</div>
+    </div>
+  `).join("");
+
+  $("totalAmt").textContent = money(total);
+  $("annualAmt").textContent = money(total*12) + " / year";
+}
+
+render();
+</script>
+</body>
+</html>
