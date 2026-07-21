@@ -198,7 +198,7 @@
           <button data-arch="perAZ">One / AZ</button>
           <button data-arch="regional">Regional</button>
         </div>
-        <div class="note" id="archNote">One NAT Gateway for the whole VPC &mdash; cheapest, single point of failure.</div>
+        <div class="note" id="archNote">One shared NAT Gateway in one AZ, serving every private subnet in the VPC &mdash; cheapest, single point of failure.</div>
       </label>
 
       <label class="field">
@@ -321,7 +321,7 @@ $("archSeg").addEventListener("click", (e) => {
   arch = btn.dataset.arch;
   [...$("archSeg").children].forEach(b => b.classList.toggle("active", b === btn));
   const notes = {
-    single: "One NAT Gateway for the whole VPC — cheapest, single point of failure.",
+    single: "One shared NAT Gateway in one AZ, serving every private subnet in the VPC — cheapest, single point of failure.",
     perAZ: "One NAT Gateway deployed in every selected AZ — standard HA pattern.",
     regional: "One Regional NAT Gateway billed per active AZ — same hourly cost as one-per-AZ, simpler to manage."
   };
@@ -360,7 +360,11 @@ function gatewayCount(azCount, archType){
   return azCount; // perAZ or regional: one active gateway-equivalent per AZ
 }
 
-function drawDiagram(gwCount, archType){
+// Diagram now takes the AZ count separately from the gateway count, so a
+// "Single" architecture with multiple AZs correctly draws every private
+// subnet funneling into the one shared NAT Gateway, instead of only ever
+// drawing a single lane.
+function drawDiagram(azCount, gwCount, archType){
   const svg = $("diagram");
   const W = 900, H = 300;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -372,29 +376,51 @@ function drawDiagram(gwCount, archType){
   s += `<rect x="20" y="20" width="${W-40}" height="${H-40}" fill="none" stroke="${strokeDim}" stroke-width="1.5" stroke-dasharray="6 5"/>`;
   s += `<text x="34" y="40" font-family="JetBrains Mono" font-size="11" fill="${stroke}" letter-spacing="1">VPC</text>`;
 
-  const shown = Math.min(gwCount, 4);
-  const overflow = gwCount - shown;
-  const laneH = (H-90) / shown;
+  const shownAZ = Math.min(azCount, 4);
+  const overflowAZ = azCount - shownAZ;
+  const laneH = (H-90) / shownAZ;
+  const isShared = archType === "single";
 
-  for(let i=0;i<shown;i++){
+  // shared NAT box sits vertically centered when there's one gateway for many AZs
+  const sharedNatCY = H/2;
+
+  for(let i=0;i<shownAZ;i++){
     const cy = 65 + laneH*i + laneH/2;
-    // private subnet box
+
+    // private subnet box (one per AZ, always)
     s += `<rect x="55" y="${cy-24}" width="190" height="48" fill="none" stroke="${stroke}" stroke-width="1.5"/>`;
     s += `<text x="70" y="${cy-6}" font-family="JetBrains Mono" font-size="10" fill="var(--ink-dim)">PRIVATE SUBNET</text>`;
     s += `<text x="70" y="${cy+14}" font-family="JetBrains Mono" font-size="10" fill="var(--ink-dim)">AZ-${i+1}</text>`;
 
-    // arrow to NAT
-    s += `<line x1="245" y1="${cy}" x2="345" y2="${cy}" stroke="${stroke}" stroke-width="1.5" stroke-dasharray="3 4"/>`;
-    s += `<polygon points="345,${cy-4} 355,${cy} 345,${cy+4}" fill="${stroke}"/>`;
+    if(isShared){
+      // every subnet's arrow bends toward the single shared NAT box
+      const natX = 360, natCY = sharedNatCY;
+      const midX = 300;
+      s += `<path d="M245,${cy} L${midX},${cy} L${natX-5},${natCY}" fill="none" stroke="${stroke}" stroke-width="1.5" stroke-dasharray="3 4"/>`;
+      s += `<polygon points="${natX-15},${natCY-4} ${natX-5},${natCY} ${natX-15},${natCY+4}" fill="${stroke}"/>`;
+    } else {
+      // dedicated NAT gateway in the same lane as its subnet
+      s += `<line x1="245" y1="${cy}" x2="345" y2="${cy}" stroke="${stroke}" stroke-width="1.5" stroke-dasharray="3 4"/>`;
+      s += `<polygon points="345,${cy-4} 355,${cy} 345,${cy+4}" fill="${stroke}"/>`;
 
-    // NAT gateway box
-    s += `<rect x="360" y="${cy-24}" width="140" height="48" fill="var(--paper-deep)" stroke="var(--copper)" stroke-width="1.8"/>`;
-    s += `<text x="430" y="${cy-6}" text-anchor="middle" font-family="Rajdhani" font-weight="700" font-size="13" fill="var(--copper)">NAT GW</text>`;
-    s += `<text x="430" y="${cy+13}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--ink-dim)">${archType==='single' && i===0 ? 'shared' : 'AZ-'+(i+1)}</text>`;
+      s += `<rect x="360" y="${cy-24}" width="140" height="48" fill="var(--paper-deep)" stroke="var(--copper)" stroke-width="1.8"/>`;
+      s += `<text x="430" y="${cy-6}" text-anchor="middle" font-family="Rajdhani" font-weight="700" font-size="13" fill="var(--copper)">NAT GW</text>`;
+      s += `<text x="430" y="${cy+13}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--ink-dim)">AZ-${i+1}</text>`;
 
-    // arrow to IGW rail
-    s += `<line x1="500" y1="${cy}" x2="610" y2="${cy}" stroke="${strokeDim}" stroke-width="1.5" stroke-dasharray="3 4"/>`;
-    s += `<polygon points="610,${cy-4} 620,${cy} 610,${cy+4}" fill="${strokeDim}"/>`;
+      s += `<line x1="500" y1="${cy}" x2="610" y2="${cy}" stroke="${strokeDim}" stroke-width="1.5" stroke-dasharray="3 4"/>`;
+      s += `<polygon points="610,${cy-4} 620,${cy} 610,${cy+4}" fill="${strokeDim}"/>`;
+    }
+  }
+
+  if(isShared){
+    // one NAT gateway box shared by every subnet lane above
+    const natCY = sharedNatCY;
+    s += `<rect x="360" y="${natCY-24}" width="140" height="48" fill="var(--paper-deep)" stroke="var(--copper)" stroke-width="1.8"/>`;
+    s += `<text x="430" y="${natCY-6}" text-anchor="middle" font-family="Rajdhani" font-weight="700" font-size="13" fill="var(--copper)">NAT GW</text>`;
+    s += `<text x="430" y="${natCY+13}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--ink-dim)">shared</text>`;
+
+    s += `<line x1="500" y1="${natCY}" x2="610" y2="${natCY}" stroke="${strokeDim}" stroke-width="1.5" stroke-dasharray="3 4"/>`;
+    s += `<polygon points="610,${natCY-4} 620,${natCY} 610,${natCY+4}" fill="${strokeDim}"/>`;
   }
 
   // shared IGW + internet
@@ -409,8 +435,8 @@ function drawDiagram(gwCount, archType){
   s += `<text x="820" y="${midY-2}" text-anchor="middle" font-family="Rajdhani" font-weight="600" font-size="12" fill="var(--ink)">INTERNET</text>`;
   s += `<text x="820" y="${midY+14}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--ink-dim)">0.0.0.0/0</text>`;
 
-  if(overflow > 0){
-    s += `<text x="55" y="${H-14}" font-family="JetBrains Mono" font-size="10" fill="var(--copper)">+ ${overflow} more AZ${overflow>1?'s':''} not shown, same pattern</text>`;
+  if(overflowAZ > 0){
+    s += `<text x="55" y="${H-14}" font-family="JetBrains Mono" font-size="10" fill="var(--copper)">+ ${overflowAZ} more AZ${overflowAZ>1?'s':''} not shown, same pattern</text>`;
   }
 
   svg.innerHTML = s;
@@ -438,7 +464,7 @@ function render(){
   $("ledgerRegion").textContent = region.id.toUpperCase();
 
   const gwCount = gatewayCount(az, arch);
-  drawDiagram(gwCount, arch);
+  drawDiagram(az, gwCount, arch);
 
   const hourlyCost = gwCount * hrs * rate;
   const dataCost = gb * rate;
